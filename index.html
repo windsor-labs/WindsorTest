@@ -16,7 +16,7 @@ input,select{width:100%;border:1px solid #cfd5df;border-radius:11px;padding:11px
 .progress{height:9px;background:#e9edf4;border-radius:99px;overflow:hidden;margin:13px 0 5px}.progress>div{height:100%;background:var(--accent2);width:0;transition:width .2s}
 .stepbar{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:14px}.step{font-size:13px;font-weight:800;color:var(--accent)}
 .kuder-group{border:1px solid var(--line);border-radius:16px;padding:17px;margin-bottom:13px}.grouphead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.groupnum{font-size:12px;font-weight:800;color:var(--muted)}
-.choice{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 12px;border-radius:12px;background:#fafbfc;border:1px solid #edf0f4;margin:7px 0}.choice label{margin:0;font-weight:600;line-height:1.4}.choice .mini{font-size:11px;color:var(--muted);display:block;margin-top:3px}.choice select{width:180px}
+.kuder-select{width:100%!important;min-height:44px}.choice{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 12px;border-radius:12px;background:#fafbfc;border:1px solid #edf0f4;margin:7px 0}.choice label{margin:0;font-weight:600;line-height:1.4}.choice .mini{font-size:11px;color:var(--muted);display:block;margin-top:3px}.choice select{width:180px}
 .hq{display:grid;grid-template-columns:45px 1fr 250px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #eef0f3}.qnum{font-weight:800;color:var(--accent)}.htext{line-height:1.45}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:12px;padding:11px 15px;font-weight:800}.btn.primary{background:var(--accent);color:#fff}.btn.secondary{background:#eef2f7;color:#23304a}.btn.danger{background:#fff0ef;color:var(--bad);border:1px solid #ffd1cc}.btn:disabled{opacity:.45;cursor:not-allowed}
 .results h2{display:flex;justify-content:space-between;align-items:center}.live{font-size:11px;padding:5px 8px;border-radius:999px;background:#eaf7ef;color:var(--good);font-weight:800}
@@ -60,10 +60,81 @@ function validityScore(){let s=0;for(const[g,o,t]of DATA.kuderValidityKey){const
 function kuderScores(){return DATA.kuderKeys.map(key=>{let s=0;for(const[g,o,t]of key){const a=state.kuder[g];if(!a)continue;if(t==="C"&&a.plus===o)s++;if(t==="E"&&a.minus===o)s++}return s})}
 function herreraScores(){return DATA.herreraCategories.map(c=>DATA.herreraMap[c].reduce((s,i)=>s+(Number(state.herrera[i])||0),0))}
 function herreraNorm(score,i){const gender=$("gender").value;if(!gender)return 0;const rows=DATA.herreraNorms[gender][i]||[];let best=0;for(const[raw,y]of rows){const nums=String(raw).match(/\d+/g)?.map(Number)||[];if(nums.length===1&&score>=nums[0])best=Number(y);else if(nums.length>=2&&score>=nums[0]&&score<=nums[1])best=Number(y)}return best}
-function renderKuder(){const start=state.page*state.pageSize,end=Math.min(start+state.pageSize,168);$("sectionTitle").textContent="2. Kuder Vocacional";$("sectionSub").textContent="En cada grupo elige una actividad que te guste MÁS y otra que te guste MENOS."; $("counter").textContent=`${end} / 168`;$("progressBar").style.width=`${end/168*100}%`;let out="";
-for(let g=start;g<end;g++){const a=state.kuder[g];out+=`<div class="kuder-group"><div class="grouphead"><span class="groupnum">GRUPO ${g+1} DE 168</span><span class="badge">${a.plus!==null&&a.minus!==null?"✓ contestado":"Pendiente"}</span></div>`;
-DATA.kuderGroups[g].forEach((q,o)=>{out+=`<div class="choice"><label>${esc(q.text)}<span class="mini">Opción ${esc(q.letter)}</span></label><div style="display:flex;gap:6px"><select data-g="${g}" data-o="${o}" data-t="plus"><option value="">Más</option><option value="${o}" ${a.plus===o?"selected":""}>ME GUSTA MÁS</option></select><select data-g="${g}" data-o="${o}" data-t="minus"><option value="">Menos</option><option value="${o}" ${a.minus===o?"selected":""}>ME GUSTA MENOS</option></select></div></div>`});out+="</div>"}$("testContent").innerHTML=out;$("prevBtn").disabled=state.page===0;$("nextBtn").style.display=end===168?"none":"inline-block";$("finishBtn").style.display=end===168?"inline-block":"none";
-document.querySelectorAll("#testContent select").forEach(sel=>sel.onchange=()=>{const g=+sel.dataset.g,o=+sel.dataset.o,t=sel.dataset.t;if(sel.value==="")state.kuder[g][t]=null;else{const other=t==="plus"?"minus":"plus";if(state.kuder[g][other]===o)state.kuder[g][other]=null;state.kuder[g][t]=o}renderLive();renderKuder()})}
+function renderKuder(){
+  const start=state.page*state.pageSize,end=Math.min(start+state.pageSize,168);
+  $("sectionTitle").textContent="2. Kuder Vocacional";
+  $("sectionSub").textContent="En cada grupo selecciona directamente qué actividad te gusta MÁS y cuál te gusta MENOS.";
+  $("counter").textContent=`${end} / 168`;
+  $("progressBar").style.width=`${end/168*100}%`;
+
+  let out="";
+  for(let g=start;g<end;g++){
+    const a=state.kuder[g];
+    const opts=DATA.kuderGroups[g].map((q,o)=>
+      `<option value="${o}">${esc(q.text)}</option>`
+    ).join("");
+
+    out+=`
+      <div class="kuder-group">
+        <div class="grouphead">
+          <span class="groupnum">GRUPO ${g+1} DE 168</span>
+          <span class="badge">${a.plus!==null&&a.minus!==null?"✓ contestado":"Pendiente"}</span>
+        </div>
+
+        <div class="notice" style="margin-bottom:12px">
+          Selecciona una opción en cada lista. La misma actividad no puede ser elegida como MÁS y MENOS.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label>Me gusta MÁS</label>
+            <select class="kuder-select" data-g="${g}" data-t="plus">
+              <option value="">Seleccionar actividad...</option>
+              ${opts}
+            </select>
+          </div>
+
+          <div>
+            <label>Me gusta MENOS</label>
+            <select class="kuder-select" data-g="${g}" data-t="minus">
+              <option value="">Seleccionar actividad...</option>
+              ${opts}
+            </select>
+          </div>
+        </div>
+
+        <div class="small" style="margin-top:9px">
+          ${DATA.kuderGroups[g].map((q,o)=>`<strong>${esc(q.letter)}</strong> = ${esc(q.text)}`).join(" · ")}
+        </div>
+      </div>`;
+  }
+
+  $("testContent").innerHTML=out;
+  $("prevBtn").disabled=state.page===0;
+  $("nextBtn").style.display=end===168?"none":"inline-block";
+  $("finishBtn").style.display=end===168?"inline-block":"none";
+
+  document.querySelectorAll("#testContent .kuder-select").forEach(sel=>{
+    const g=+sel.dataset.g;
+    const type=sel.dataset.t;
+
+    sel.value=state.kuder[g][type]===null?"":String(state.kuder[g][type]);
+
+    sel.onchange=()=>{
+      const value=sel.value===""?null:+sel.value;
+      const other=type==="plus"?"minus":"plus";
+
+      if(value!==null && state.kuder[g][other]===value){
+        state.kuder[g][other]=null;
+      }
+
+      state.kuder[g][type]=value;
+      renderLive();
+      renderKuder();
+    };
+  });
+}
+
 function renderHerrera(){const start=state.page*state.pageSize,end=Math.min(start+state.pageSize,60);$("sectionTitle").textContent="3. Cuestionario Herrera y Montes";$("sectionSub").textContent="4 = me gusta mucho · 3 = me gusta algo · 2 = indiferente · 1 = me desagrada algo · 0 = me desagrada mucho";$("counter").textContent=`${end} / 60`;$("progressBar").style.width=`${end/60*100}%`;let out="";
 for(let i=start;i<end;i++){const q=DATA.herreraItems[i];out+=`<div class="hq"><div class="qnum">${q.n}</div><div class="htext">${esc(q.text)}</div><select class="rating" data-h="${i}"><option value="">Seleccionar</option><option value="4" ${state.herrera[i]===4?"selected":""}>4 · Me gusta mucho</option><option value="3" ${state.herrera[i]===3?"selected":""}>3 · Me gusta algo o en parte</option><option value="2" ${state.herrera[i]===2?"selected":""}>2 · Me es indiferente</option><option value="1" ${state.herrera[i]===1?"selected":""}>1 · Me desagrada algo o en parte</option><option value="0" ${state.herrera[i]===0?"selected":""}>0 · Me desagrada mucho o totalmente</option></select></div>`}$("testContent").innerHTML=out;$("prevBtn").disabled=state.page===0;$("nextBtn").style.display=end===60?"none":"inline-block";$("finishBtn").style.display=end===60?"inline-block":"none";document.querySelectorAll(".rating").forEach(s=>s.onchange=()=>{state.herrera[+s.dataset.h]=s.value===""?null:+s.value;renderLive();renderHerrera()})}
 function renderLive(){const ka=answeredKuder();$("kAnswered").textContent=Math.round(ka/168*100)+"%";const vs=validityScore();$("kValidity").textContent=ka===168?(vs<32?"INVÁLIDA":vs<36?"DUDOSA":"VÁLIDA"):"Provisional";const ks=kuderScores();$("kuderResults").innerHTML=DATA.kuderScaleNames.map((n,i)=>{const raw=ks[i],p=lookup(DATA.kuderBaremo[i].x,DATA.kuderBaremo[i].y,raw);return `<div class="result-row"><div class="rhead"><span>${n}</span><span>${raw} · ${p}</span></div><div class="bar"><span style="width:${Math.min(99,p)}%"></span></div></div>`}).join("");
