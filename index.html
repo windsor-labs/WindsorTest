@@ -1,1 +1,583 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Vocacional - Kuder & Herrera</title>
+    <!-- Cargar SheetJS desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #f4f7fc; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; margin-top: 20px; }
+        .section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #ddd; }
+        .section:last-child { border-bottom: none; }
+        label { display: inline-block; margin: 5px 0; }
+        input, select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .file-upload { margin: 20px 0; }
+        .grupo-kuder { background: #f9f9f9; padding: 15px; margin-bottom: 10px; border-radius: 5px; border-left: 4px solid #3498db; }
+        .grupo-kuder .opciones { display: flex; gap: 20px; flex-wrap: wrap; }
+        .grupo-kuder .opcion { display: flex; align-items: center; gap: 8px; }
+        .grupo-kuder .seleccion { display: flex; gap: 30px; margin-top: 10px; flex-wrap: wrap; }
+        .grupo-kuder .seleccion label { margin-right: 15px; }
+        .pregunta-herrera { display: flex; align-items: center; gap: 15px; padding: 6px 0; border-bottom: 1px solid #eee; }
+        .pregunta-herrera .texto { flex: 1; }
+        .pregunta-herrera select { width: 70px; }
+        .resultados table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .resultados th, .resultados td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        .resultados th { background: #3498db; color: #fff; }
+        .resultados .validez { font-weight: bold; }
+        .btn-calcular { background: #27ae60; color: #fff; border: none; padding: 12px 30px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+        .btn-calcular:hover { background: #219a52; }
+        .alert { padding: 15px; background: #f8d7da; color: #721c24; border-radius: 5px; margin: 10px 0; }
+        .tabla-baremos { font-size: 0.9em; margin: 10px 0; }
+        .oculto { display: none; }
+        .flex-row { display: flex; gap: 20px; flex-wrap: wrap; }
+        .flex-col { flex: 1; min-width: 300px; }
+        @media (max-width: 600px) { .grupo-kuder .seleccion { flex-direction: column; gap: 5px; } }
+        .estado-validez { font-weight: bold; padding: 4px 10px; border-radius: 4px; display: inline-block; }
+        .valido { background: #d4edda; color: #155724; }
+        .dudoso { background: #fff3cd; color: #856404; }
+        .invalido { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📋 Test Vocacional</h1>
+    <p>Carga tu archivo <strong>TEST VOCACIONAL.xlsx</strong> para comenzar.</p>
 
+    <!-- Carga de archivo -->
+    <div class="file-upload section">
+        <label for="fileInput"><strong>Seleccionar archivo Excel:</strong></label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <div id="fileStatus" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- Datos personales -->
+    <div id="datosPersonales" class="section oculto">
+        <h2>Datos Personales</h2>
+        <div class="flex-row">
+            <div><label>Nombre:</label> <span id="dpNombre"></span></div>
+            <div><label>Edad:</label> <span id="dpEdad"></span></div>
+            <div><label>Género:</label> <span id="dpGenero"></span></div>
+            <div><label>Centro de estudio:</label> <span id="dpCentro"></span></div>
+        </div>
+    </div>
+
+    <!-- Instrucciones Kuder -->
+    <div id="instruccionesKuder" class="section oculto">
+        <h2>Indicaciones Kuder</h2>
+        <div id="textoInstrucciones"></div>
+    </div>
+
+    <!-- Test Kuder -->
+    <div id="testKuder" class="section oculto">
+        <h2>📌 Test Kuder</h2>
+        <p>En cada grupo, selecciona la actividad que <strong>más te gusta</strong> (columna +) y la que <strong>menos te gusta</strong> (columna -). La tercera queda sin marcar.</p>
+        <div id="kuderGrupos"></div>
+    </div>
+
+    <!-- Test Herrera -->
+    <div id="testHerrera" class="section oculto">
+        <h2>📌 Cuestionario Herrera y Montes</h2>
+        <p>Indica cuánto te gustaría realizar cada actividad, usando la escala: 0=Me desagrada mucho, 1=Me desagrada algo, 2=Indiferente, 3=Me gusta algo, 4=Me gusta mucho.</p>
+        <div id="herreraPreguntas"></div>
+    </div>
+
+    <!-- Botón calcular -->
+    <div id="acciones" class="section oculto">
+        <button class="btn-calcular" id="btnCalcular">📊 Calcular Resultados</button>
+    </div>
+
+    <!-- Resultados -->
+    <div id="resultados" class="section oculto">
+        <h2>📈 Resultados</h2>
+        <div id="resultadoValidez"></div>
+        <div id="resultadoKuder"></div>
+        <div id="resultadoHerrera"></div>
+        <div id="resultadoPromedio"></div>
+    </div>
+</div>
+
+<script>
+    // ------------------------------------------------------------
+    // VARIABLES GLOBALES
+    // ------------------------------------------------------------
+    let workbook = null;
+    let datosPersonales = {};
+    let kuderActividades = [];   // array de objetos con: fila, letra, texto
+    let kuderRefs = {};          // mapeo "C4" -> escala, "E4" -> escala
+    let herreraPreguntas = [];   // array de objetos: { id: 1..60, texto, area }
+    let baremosKuder = { Masculino: {}, Femenino: {} };
+    let baremosHerrera = {};
+
+    // ------------------------------------------------------------
+    // FUNCIONES DE CARGA Y PARSEO
+    // ------------------------------------------------------------
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(loadEvent) {
+            try {
+                const data = new Uint8Array(loadEvent.target.result);
+                workbook = XLSX.read(data, { type: 'array' });
+                procesarLibro(workbook);
+                document.getElementById('fileStatus').innerHTML = '<span style="color:green;">✅ Archivo cargado correctamente.</span>';
+                mostrarInterfaz();
+            } catch(err) {
+                document.getElementById('fileStatus').innerHTML = '<span style="color:red;">❌ Error al leer el archivo: ' + err.message + '</span>';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function procesarLibro(wb) {
+        // 1. Datos personales
+        const dp = wb.Sheets['Datos personales'];
+        if (dp) {
+            datosPersonales.nombre = dp['B3'] ? dp['B3'].v : '';
+            datosPersonales.edad = dp['B4'] ? dp['B4'].v : '';
+            datosPersonales.genero = dp['C4'] ? dp['C4'].v : '';
+            datosPersonales.centro = dp['B5'] ? dp['B5'].v : '';
+        }
+
+        // 2. Instrucciones Kuder (opcional)
+        const inst = wb.Sheets['Indicaciones Kuder'];
+        // No se parsea en detalle, se muestra un mensaje genérico.
+
+        // 3. Prueba Kuder: actividades + referencias
+        const pk = wb.Sheets['Prueba Kuder'];
+        if (pk) {
+            // Extraer las filas de actividad (desde la fila 4 en adelante)
+            // Las fórmulas de escala están en las celdas J4:S4 (columna J a S, fila 4)
+            // Extraemos las referencias de cada fórmula
+            const escalas = ['J4','K4','L4','M4','N4','O4','P4','Q4','R4','S4'];
+            const nombreEscalas = ['Aire libre','Mecánico','Cálculo','Científico','Persuasivo','Artístico','Literario','Musical','Servicio social','Oficina'];
+            escalas.forEach((celda, idx) => {
+                const cell = pk[celda];
+                if (cell && cell.f) {
+                    const formula = cell.f;
+                    // Extraer todas las referencias Cxx o Exx
+                    const refs = formula.match(/[CE]\d+/g) || [];
+                    refs.forEach(ref => {
+                        kuderRefs[ref] = idx;
+                    });
+                }
+            });
+
+            // Extraer actividades: recorremos las filas desde la 4 hasta encontrar fila vacía
+            // Usamos el rango A:S, filas 4 a 1000 (aproximado)
+            let fila = 4;
+            let actividades = [];
+            while (true) {
+                const celdaTexto = pk['B' + fila];
+                const celdaLetra = pk['D' + fila];
+                if (!celdaTexto || !celdaLetra) break;
+                const texto = celdaTexto.v;
+                const letra = celdaLetra.v;
+                if (texto && letra && typeof letra === 'string' && letra.match(/^[a-zA-Z]$/)) {
+                    actividades.push({ fila: fila, letra: letra, texto: texto });
+                } else {
+                    // Si encontramos una fila sin actividad, podría ser el fin o una fila de página
+                    // Si no hay texto ni letra, rompemos?
+                    // Mejor continuar hasta que no haya texto
+                }
+                fila++;
+                if (fila > 800) break; // límite de seguridad
+            }
+            kuderActividades = actividades;
+        }
+
+        // 4. Herrera y Montes (preguntas)
+        const hm = wb.Sheets['Herrera Masculino'];
+        if (hm) {
+            // Las preguntas están en las filas 12 a 71, columna B (texto) y columna J (respuesta)
+            // Extraemos el texto de cada pregunta
+            const areas = ['Servicio social','Persuasivo','Literario','Artístico','Musical','Oficina','Científico','Cálculo','Mecánico','Aire libre'];
+            // Asignamos área según el patrón (pregunta % 10)
+            for (let i = 1; i <= 60; i++) {
+                const fila = 11 + i; // 12 a 71
+                const cell = hm['B' + fila];
+                if (cell) {
+                    const texto = cell.v;
+                    const areaIdx = (i - 1) % 10;
+                    const area = areas[areaIdx];
+                    herreraPreguntas.push({ id: i, texto: texto, area: area });
+                }
+            }
+        }
+
+        // 5. Baremos Kuder (Masculino y Femenino)
+        const m = wb.Sheets['Masculino'];
+        const f = wb.Sheets['Femenino'];
+        if (m) {
+            baremosKuder.Masculino = extraerBaremosKuder(m);
+        }
+        if (f) {
+            baremosKuder.Femenino = extraerBaremosKuder(f);
+        }
+
+        // 6. Baremos Herrera (está en Herrera Masculino)
+        if (hm) {
+            // La fórmula de baremo usa un lookup con rangos fijos
+            // Los rangos y equivalentes son los mismos para todas las áreas
+            baremosHerrera = {
+                rangos: [0,1,2,3,4,6,7,8,9,10,12,13,14,15,16,18,19,20,21,22,24],
+                equivalentes: [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,99]
+            };
+        }
+    }
+
+    function extraerBaremosKuder(sheet) {
+        // Las tablas están en las filas 4 a 23 (aprox) con columnas: F (rango) y G (equivalente) para Aire libre,
+        // luego H (rango) e I (equivalente) para Mecánico, etc.
+        // Vamos a construir un objeto con las 10 áreas.
+        const areas = ['Aire libre','Mecánico','Cálculo','Científico','Persuasivo','Artístico','Literario','Musical','Servicio social','Oficina'];
+        const baremos = {};
+        // Las columnas de rango y equivalente se alternan: F,G para Aire libre; H,I para Mecánico; J,K para Cálculo; L,M para Científico; N,O para Persuasivo; P,Q para Artístico; R,S para Literario; T,U para Musical; V,W para Servicio social; X,Y para Oficina
+        const columnasRango = ['F','H','J','L','N','P','R','T','V','X'];
+        const columnasEquiv = ['G','I','K','M','O','Q','S','U','W','Y'];
+        // Recorremos las filas 4 a 23 (donde están los rangos)
+        for (let i = 0; i < areas.length; i++) {
+            const area = areas[i];
+            const colR = columnasRango[i];
+            const colE = columnasEquiv[i];
+            const rangos = [];
+            const equivs = [];
+            let fila = 4;
+            while (true) {
+                const cellR = sheet[colR + fila];
+                const cellE = sheet[colE + fila];
+                if (!cellR || !cellE) break;
+                let rVal = cellR.v;
+                let eVal = cellE.v;
+                if (rVal === undefined || eVal === undefined) break;
+                // Si el rango es un string como "1 a 26", lo convertimos a un número (el inicio del rango)
+                // Pero para la búsqueda, necesitamos el límite inferior.
+                if (typeof rVal === 'string') {
+                    // Extraer el primer número
+                    const nums = rVal.match(/\d+/g);
+                    if (nums) rVal = parseInt(nums[0], 10);
+                    else rVal = 0;
+                } else {
+                    rVal = Number(rVal);
+                }
+                eVal = Number(eVal);
+                rangos.push(rVal);
+                equivs.push(eVal);
+                fila++;
+                if (fila > 30) break;
+            }
+            baremos[area] = { rangos: rangos, equivalentes: equivs };
+        }
+        return baremos;
+    }
+
+    // ------------------------------------------------------------
+    // MOSTRAR INTERFAZ
+    // ------------------------------------------------------------
+    function mostrarInterfaz() {
+        // Mostrar datos personales
+        document.getElementById('dpNombre').textContent = datosPersonales.nombre || 'N/A';
+        document.getElementById('dpEdad').textContent = datosPersonales.edad || 'N/A';
+        document.getElementById('dpGenero').textContent = datosPersonales.genero || 'N/A';
+        document.getElementById('dpCentro').textContent = datosPersonales.centro || 'N/A';
+        document.getElementById('datosPersonales').classList.remove('oculto');
+
+        // Instrucciones
+        document.getElementById('textoInstrucciones').innerHTML = `
+            <p>En cada grupo de tres actividades, elige la que <strong>más te gusta</strong> (columna +) y la que <strong>menos te gusta</strong> (columna -). La tercera quedará sin marcar.</p>
+            <p>No dejes ningún grupo sin contestar. Sé sincero, tus resultados son confidenciales.</p>
+        `;
+        document.getElementById('instruccionesKuder').classList.remove('oculto');
+
+        // Generar test Kuder
+        generarKuder();
+
+        // Generar test Herrera
+        generarHerrera();
+
+        // Mostrar acciones
+        document.getElementById('acciones').classList.remove('oculto');
+
+        // Asignar evento calcular
+        document.getElementById('btnCalcular').addEventListener('click', calcularResultados);
+    }
+
+    function generarKuder() {
+        const container = document.getElementById('kuderGrupos');
+        container.innerHTML = '';
+        // Agrupar las actividades de a 3
+        const grupos = [];
+        for (let i = 0; i < kuderActividades.length; i += 3) {
+            if (i+2 < kuderActividades.length) {
+                grupos.push(kuderActividades.slice(i, i+3));
+            }
+        }
+        if (grupos.length === 0) {
+            container.innerHTML = '<p>No se encontraron actividades de Kuder en el archivo.</p>';
+            return;
+        }
+        grupos.forEach((grupo, idx) => {
+            const div = document.createElement('div');
+            div.className = 'grupo-kuder';
+            div.dataset.grupo = idx;
+
+            // Opciones
+            const opcionesDiv = document.createElement('div');
+            opcionesDiv.className = 'opciones';
+            grupo.forEach(act => {
+                const span = document.createElement('span');
+                span.className = 'opcion';
+                span.innerHTML = `<strong>${act.letra})</strong> ${act.texto}`;
+                opcionesDiv.appendChild(span);
+            });
+            div.appendChild(opcionesDiv);
+
+            // Selección de + y -
+            const seleccionDiv = document.createElement('div');
+            seleccionDiv.className = 'seleccion';
+
+            // Columna + (más)
+            const masDiv = document.createElement('div');
+            masDiv.innerHTML = '<strong>Más (+):</strong> ';
+            grupo.forEach((act, j) => {
+                const label = document.createElement('label');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = `mas_${idx}`;
+                radio.value = act.fila;
+                radio.dataset.fila = act.fila;
+                radio.dataset.letra = act.letra;
+                label.appendChild(radio);
+                label.appendChild(document.createTextNode(act.letra));
+                masDiv.appendChild(label);
+            });
+            seleccionDiv.appendChild(masDiv);
+
+            // Columna - (menos)
+            const menosDiv = document.createElement('div');
+            menosDiv.innerHTML = '<strong>Menos (-):</strong> ';
+            grupo.forEach((act, j) => {
+                const label = document.createElement('label');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = `menos_${idx}`;
+                radio.value = act.fila;
+                radio.dataset.fila = act.fila;
+                radio.dataset.letra = act.letra;
+                label.appendChild(radio);
+                label.appendChild(document.createTextNode(act.letra));
+                menosDiv.appendChild(label);
+            });
+            seleccionDiv.appendChild(menosDiv);
+
+            div.appendChild(seleccionDiv);
+            container.appendChild(div);
+
+            // Validación: no permitir que el mismo radio esté seleccionado en ambos grupos
+            const radiosMas = div.querySelectorAll('input[name^="mas_"]');
+            const radiosMenos = div.querySelectorAll('input[name^="menos_"]');
+            radiosMas.forEach(r => {
+                r.addEventListener('change', function() {
+                    const fila = this.value;
+                    // Desmarcar en menos si está seleccionado
+                    radiosMenos.forEach(r2 => {
+                        if (r2.value === fila && r2.checked) {
+                            r2.checked = false;
+                        }
+                    });
+                });
+            });
+            radiosMenos.forEach(r => {
+                r.addEventListener('change', function() {
+                    const fila = this.value;
+                    radiosMas.forEach(r2 => {
+                        if (r2.value === fila && r2.checked) {
+                            r2.checked = false;
+                        }
+                    });
+                });
+            });
+        });
+        document.getElementById('testKuder').classList.remove('oculto');
+    }
+
+    function generarHerrera() {
+        const container = document.getElementById('herreraPreguntas');
+        container.innerHTML = '';
+        if (herreraPreguntas.length === 0) {
+            container.innerHTML = '<p>No se encontraron preguntas de Herrera en el archivo.</p>';
+            return;
+        }
+        herreraPreguntas.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'pregunta-herrera';
+            div.innerHTML = `
+                <span><strong>${p.id}.</strong></span>
+                <span class="texto">${p.texto}</span>
+                <select data-pregunta="${p.id}" data-area="${p.area}">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                </select>
+            `;
+            container.appendChild(div);
+        });
+        document.getElementById('testHerrera').classList.remove('oculto');
+    }
+
+    // ------------------------------------------------------------
+    // CÁLCULO DE RESULTADOS
+    // ------------------------------------------------------------
+    function calcularResultados() {
+        // 1. Recolectar respuestas Kuder
+        const grupos = document.querySelectorAll('.grupo-kuder');
+        const respuestas = {}; // fila -> { tipo: 'mas' o 'menos' }
+        let validezCount = 0;
+        let todasRespondidas = true;
+
+        grupos.forEach((grupo, idx) => {
+            const mas = grupo.querySelector(`input[name="mas_${idx}"]:checked`);
+            const menos = grupo.querySelector(`input[name="menos_${idx}"]:checked`);
+            if (!mas || !menos) {
+                todasRespondidas = false;
+                return;
+            }
+            const filaMas = parseInt(mas.value);
+            const filaMenos = parseInt(menos.value);
+            respuestas[filaMas] = 'mas';
+            respuestas[filaMenos] = 'menos';
+        });
+
+        if (!todasRespondidas) {
+            alert('Por favor, responde todos los grupos del test Kuder (elige + y - en cada uno).');
+            return;
+        }
+
+        // Calcular puntajes naturales Kuder (10 escalas)
+        const puntajesKuder = new Array(10).fill(0);
+        for (let fila in respuestas) {
+            const tipo = respuestas[fila];
+            const ref = (tipo === 'mas') ? 'C' + fila : 'E' + fila;
+            const escala = kuderRefs[ref];
+            if (escala !== undefined) {
+                puntajesKuder[escala]++;
+            }
+        }
+        // La validez es el puntaje de la escala 0 (Aire libre)
+        validezCount = puntajesKuder[0];
+
+        // 2. Recolectar respuestas Herrera
+        const selects = document.querySelectorAll('#herreraPreguntas select');
+        const respuestasHerrera = {};
+        selects.forEach(sel => {
+            const id = parseInt(sel.dataset.pregunta);
+            const valor = parseInt(sel.value);
+            respuestasHerrera[id] = valor;
+        });
+
+        // Calcular puntajes naturales Herrera por área
+        const areasH = ['Servicio social','Persuasivo','Literario','Artístico','Musical','Oficina','Científico','Cálculo','Mecánico','Aire libre'];
+        const puntajesHerrera = new Array(10).fill(0);
+        herreraPreguntas.forEach(p => {
+            const idx = areasH.indexOf(p.area);
+            if (idx !== -1) {
+                puntajesHerrera[idx] += (respuestasHerrera[p.id] || 0);
+            }
+        });
+
+        // 3. Obtener baremos según género
+        const genero = datosPersonales.genero ? datosPersonales.genero.trim().toLowerCase() : '';
+        const generoKey = (genero === 'femenino' || genero === 'f') ? 'Femenino' : 'Masculino';
+        const baremosGen = baremosKuder[generoKey] || baremosKuder['Masculino'];
+
+        // Convertir puntajes Kuder a percentiles
+        const percentilesKuder = puntajesKuder.map((p, idx) => {
+            const area = ['Aire libre','Mecánico','Cálculo','Científico','Persuasivo','Artístico','Literario','Musical','Servicio social','Oficina'][idx];
+            const tabla = baremosGen[area];
+            if (!tabla) return 0;
+            return buscarPercentil(p, tabla.rangos, tabla.equivalentes);
+        });
+
+        // Convertir puntajes Herrera a percentiles
+        const percentilesHerrera = puntajesHerrera.map(p => {
+            return buscarPercentil(p, baremosHerrera.rangos, baremosHerrera.equivalentes);
+        });
+
+        // 4. Promedio de intereses
+        const promedios = percentilesKuder.map((k, idx) => {
+            const h = percentilesHerrera[idx] || 0;
+            return Math.round((k + h) / 2);
+        });
+
+        // 5. Mostrar resultados
+        mostrarResultados(validezCount, puntajesKuder, percentilesKuder, puntajesHerrera, percentilesHerrera, promedios);
+    }
+
+    function buscarPercentil(puntaje, rangos, equivalentes) {
+        // Buscar el primer rango donde puntaje <= rango[i]
+        for (let i = rangos.length - 1; i >= 0; i--) {
+            if (puntaje >= rangos[i]) {
+                return equivalentes[i];
+            }
+        }
+        return 0;
+    }
+
+    function mostrarResultados(validez, puntajesK, percK, puntajesH, percH, promedios) {
+        const areas = ['Aire libre','Mecánico','Cálculo','Científico','Persuasivo','Artístico','Literario','Musical','Servicio social','Oficina'];
+        const container = document.getElementById('resultados');
+        container.classList.remove('oculto');
+
+        // Validez
+        let validezTexto = '';
+        let claseValidez = '';
+        if (validez < 32) { validezTexto = 'INVÁLIDA'; claseValidez = 'invalido'; }
+        else if (validez < 36) { validezTexto = 'DUDOSA'; claseValidez = 'dudoso'; }
+        else { validezTexto = 'VÁLIDA'; claseValidez = 'valido'; }
+        document.getElementById('resultadoValidez').innerHTML = `
+            <h3>Validez de la prueba Kuder</h3>
+            <p>Puntaje de validez: <strong>${validez}</strong> <span class="estado-validez ${claseValidez}">${validezTexto}</span></p>
+        `;
+
+        // Tabla de resultados Kuder
+        let htmlK = `<h3>Resultados Kuder (percentiles)</h3><table><tr><th>Área</th><th>Puntaje Natural</th><th>Percentil</th></tr>`;
+        areas.forEach((area, i) => {
+            htmlK += `<tr><td>${area}</td><td>${puntajesK[i]}</td><td>${percK[i]}</td></tr>`;
+        });
+        htmlK += '</table>';
+        document.getElementById('resultadoKuder').innerHTML = htmlK;
+
+        // Resultados Herrera
+        let htmlH = `<h3>Resultados Herrera y Montes (percentiles)</h3><table><tr><th>Área</th><th>Puntaje Natural</th><th>Percentil</th></tr>`;
+        areas.forEach((area, i) => {
+            htmlH += `<tr><td>${area}</td><td>${puntajesH[i]}</td><td>${percH[i]}</td></tr>`;
+        });
+        htmlH += '</table>';
+        document.getElementById('resultadoHerrera').innerHTML = htmlH;
+
+        // Promedio
+        let htmlP = `<h3>Promedio de Intereses (Kuder + Herrera)</h3><table><tr><th>Área</th><th>Promedio Percentil</th></tr>`;
+        areas.forEach((area, i) => {
+            htmlP += `<tr><td>${area}</td><td>${promedios[i]}</td></tr>`;
+        });
+        htmlP += '</table>';
+        document.getElementById('resultadoPromedio').innerHTML = htmlP;
+
+        // Desplazar a resultados
+        container.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ------------------------------------------------------------
+    // Inicialización
+    // ------------------------------------------------------------
+    // Si el archivo ya está cargado (ej. por arrastrar), no hacemos nada.
+    console.log('HTML listo. Carga el archivo Excel para comenzar.');
+</script>
+</body>
+</html>
